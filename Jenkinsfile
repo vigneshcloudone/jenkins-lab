@@ -2,18 +2,24 @@ pipeline {
     agent any
 
     stages {
-
         stage('Checkout Code') {
             steps {
-                echo 'Fetching code from GitHub...'
                 checkout scm
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                echo 'Building Docker image...'
                 sh 'docker build -t webapp:1 .'
+            }
+        }
+
+        stage('Tag Image for ECR') {
+            steps {
+                sh '''
+                  docker tag webapp:1 \
+                  201263439518.dkr.ecr.ap-south-1.amazonaws.com/jenkins-lab:1
+                '''
             }
         }
     }
