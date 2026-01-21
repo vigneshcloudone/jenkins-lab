@@ -33,5 +33,13 @@ pipeline {
     }
 }
 
+        stage('Pushing image to aws ECR'){
+            steps {
+                sh '''
+                  docker push 201263439518.dkr.ecr.ap-south-1.amazonaws.com/jenkins-lab
+                '''
+            }
+        }
+
     }
 }
