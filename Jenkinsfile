@@ -1,7 +1,15 @@
 pipeline {
     agent any
 
+    environment {
+        AWS_REGION = "ap-south-1"
+        ECR_REGISTRY = "201263439518.dkr.ecr.ap-south-1.amazonaws.com"
+        ECR_REPO = "jenkins-lab"
+        IMAGE_TAG = "${BUILD_NUMBER}"
+    }
+
     stages {
+
         stage('Checkout Code') {
             steps {
                 checkout scm
@@ -10,36 +18,36 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t webapp:1 .'
+                sh """
+                docker build -t ${ECR_REPO}:latest .
+                """
             }
         }
 
-        stage('Tag Image for ECR') {
+        stage('Authenticate to ECR') {
             steps {
-                sh '''
-                  docker tag webapp:1 \
-                  201263439518.dkr.ecr.ap-south-1.amazonaws.com/jenkins-lab:1
-                '''
+                sh """
+                aws ecr get-login-password --region ${AWS_REGION} \
+                | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                """
             }
         }
 
-        stage('Login to AWS ECR') {
-    steps {
-        sh '''
-          aws ecr get-login-password --region ap-south-1 | \
-          docker login --username AWS --password-stdin \
-          201263439518.dkr.ecr.ap-south-1.amazonaws.com
-        '''
-    }
-}
-
-        stage('Pushing image to aws ECR'){
+        stage('Tag Image') {
             steps {
-                sh '''
-                  docker push 201263439518.dkr.ecr.ap-south-1.amazonaws.com/jenkins-lab:1
-                '''
+                sh """
+                docker tag ${ECR_REPO}:latest \
+                ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
+                """
             }
         }
 
+        stage('Push Image to ECR') {
+            steps {
+                sh """
+                docker push ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
+                """
+            }
+        }
     }
 }
