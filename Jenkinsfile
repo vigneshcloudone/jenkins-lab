@@ -50,7 +50,7 @@ pipeline {
                     --name webapp \
                     -p 8081:80 \
                     $ECR_REPO:${IMAGE_TAG}
-                EOF
+EOF
                 '''
             }
         }
