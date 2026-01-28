@@ -5,7 +5,7 @@ pipeline {
         AWS_REGION = "ap-south-1"
         ECR_REPO = "201263439518.dkr.ecr.ap-south-1.amazonaws.com/jenkins-lab"
         IMAGE_TAG = "latest"
-        TARGET_EC2 = "ubuntu@172-31-2-211"
+        TARGET_EC2 = "ubuntu@172.31.2.211"
     }
 
     stages {
