@@ -49,16 +49,5 @@ pipeline {
                 """
             }
         }
-
-        stage('Run Container') {
-    steps {
-        sh '''
-          docker stop webapp || true
-          docker rm webapp || true
-          docker run -d -p 8081:80 --name webapp \
-          201263439518.dkr.ecr.ap-south-1.amazonaws.com/jenkins-lab:1
-        '''
-    }
-}
     }
 }
