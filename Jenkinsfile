@@ -9,7 +9,7 @@ pipeline {
 
     stages {
 
-        stage('Build Docker Image') {
+        stage('Build Docker Images') {
             steps {
                 sh "docker build -t jenkins-lab:${IMAGE_TAG} ."
             }
