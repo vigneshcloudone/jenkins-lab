@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         AWS_REGION = "ap-south-1"
-        ECR_REPO = "201263439518.dkr.ecr.ap-south-1.amazonaws.com/jenkins-lab"
+        ECR_REPO  = "201263439518.dkr.ecr.ap-south-1.amazonaws.com/jenkins-lab"
         IMAGE_TAG = "latest"
     }
 
@@ -11,7 +11,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t jenkins-lab:${IMAGE_TAG} .'
+                sh "docker build -t jenkins-lab:${IMAGE_TAG} ."
             }
         }
 
@@ -27,10 +27,10 @@ pipeline {
         stage('Tag & Push Image') {
             steps {
                 sh '''
-                docker tag jenkins-lab:${IMAGE_TAG} $ECR_REPO:${IMAGE_TAG}
-                docker push $ECR_REPO:${IMAGE_TAG}
+                docker tag jenkins-lab:$IMAGE_TAG $ECR_REPO:$IMAGE_TAG
+                docker push $ECR_REPO:$IMAGE_TAG
                 '''
             }
         }
-
-       }
+    }
+}
