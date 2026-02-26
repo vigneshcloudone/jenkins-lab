@@ -67,29 +67,27 @@ pipeline {
             }
         }
 
-        stage('Deploy to ECS') {
+stage('Deploy to ECS') {
     steps {
         sh """
-        echo "Fetching current task definition..."
+        IMAGE=${ECR_REPO}:${GIT_SHA}
 
+        # Get current task definition
         aws ecs describe-task-definition \
-        --task-definition ${TASK_FAMILY} \
+        --task-definition jenkins-task \
         --query taskDefinition > task-def.json
 
-        echo "Updating image..."
-
-        cat task-def.json | jq --arg IMAGE "${ECR_REPO}:${GIT_SHA}" \
-        '.containerDefinitions[0].image=$IMAGE |
-         del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' \
+        # Update image using jq
+        cat task-def.json | jq --arg IMAGE "$IMAGE" \
+        '.containerDefinitions[0].image=$IMAGE 
+        | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
         > new-task-def.json
 
-        echo "Registering new task definition..."
-
+        # Register new revision
         aws ecs register-task-definition \
         --cli-input-json file://new-task-def.json
 
-        echo "Updating ECS service..."
-
+        # Deploy
         aws ecs update-service \
         --cluster ${ECS_CLUSTER} \
         --service ${ECS_SERVICE} \
