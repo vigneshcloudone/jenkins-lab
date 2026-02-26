@@ -5,6 +5,10 @@ pipeline {
         AWS_REGION = "ap-south-1"
         ACCOUNT_ID = "201263439518"
         REPO_NAME  = "jenkins-lab"
+        CLUSTER    = "jenkins-ecs-cluster"
+        SERVICE    = "jenkins-task-service"
+        TASK_FAMILY = "jenkins-task"
+
         ECR_REPO   = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
     }
 
@@ -23,15 +27,23 @@ pipeline {
                         script: "git rev-parse --short HEAD",
                         returnStdout: true
                     ).trim()
-                    echo "Git SHA: ${env.GIT_SHA}"
                 }
             }
         }
 
         stage('Build Docker Image') {
             steps {
+                sh "docker build -t ${REPO_NAME}:${GIT_SHA} ."
+            }
+        }
+
+        stage('Test Container') {
+            steps {
                 sh """
-                docker build -t ${REPO_NAME}:${GIT_SHA} .
+                docker run -d -p 8080:80 --name test ${REPO_NAME}:${GIT_SHA}
+                sleep 5
+                curl -f http://localhost:8080 || exit 1
+                docker stop test && docker rm test
                 """
             }
         }
@@ -45,16 +57,49 @@ pipeline {
             }
         }
 
-        stage('Tag & Push Image') {
+        stage('Push Image') {
             steps {
                 sh """
                 docker tag ${REPO_NAME}:${GIT_SHA} ${ECR_REPO}:${GIT_SHA}
                 docker push ${ECR_REPO}:${GIT_SHA}
-
-                # Optional additional tag with build number
-                docker tag ${REPO_NAME}:${GIT_SHA} ${ECR_REPO}:${BUILD_NUMBER}
-                docker push ${ECR_REPO}:${BUILD_NUMBER}
                 """
+            }
+        }
+
+        stage('Deploy to ECS') {
+            steps {
+                sh """
+                echo "Fetching current task definition..."
+
+                aws ecs describe-task-definition \
+                --task-definition ${TASK_FAMILY} \
+                --query taskDefinition > task-def.json
+
+                echo "Updating image..."
+
+                cat task-def.json | jq --arg IMAGE "${ECR_REPO}:${GIT_SHA}" \
+                '.containerDefinitions[0].image=$IMAGE |
+                 del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' \
+                > new-task-def.json
+
+                echo "Registering new revision..."
+
+                aws ecs register-task-definition \
+                --cli-input-json file://new-task-def.json
+
+                echo "Updating ECS service..."
+
+                aws ecs update-service \
+                --cluster ${CLUSTER} \
+                --service ${SERVICE} \
+                --force-new-deployment
+                """
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                sh "docker system prune -f"
             }
         }
     }
