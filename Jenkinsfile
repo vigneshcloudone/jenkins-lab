@@ -68,35 +68,35 @@ pipeline {
         }
 
         stage('Deploy to ECS') {
-            steps {
-                sh """
-                echo "Fetching current task definition..."
+    steps {
+        sh """
+        echo "Fetching current task definition..."
 
-                aws ecs describe-task-definition \
-                --task-definition ${TASK_FAMILY} \
-                --query taskDefinition > task-def.json
+        aws ecs describe-task-definition \
+        --task-definition ${TASK_FAMILY} \
+        --query taskDefinition > task-def.json
 
-                echo "Updating image..."
+        echo "Updating image..."
 
-                cat task-def.json | jq --arg IMAGE "${ECR_REPO}:${GIT_SHA}" \
-                '.containerDefinitions[0].image=$IMAGE |
-                 del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' \
-                > new-task-def.json
+        cat task-def.json | jq --arg IMAGE "${ECR_REPO}:${GIT_SHA}" \
+        '.containerDefinitions[0].image=$IMAGE |
+         del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' \
+        > new-task-def.json
 
-                echo "Registering new revision..."
+        echo "Registering new task definition..."
 
-                aws ecs register-task-definition \
-                --cli-input-json file://new-task-def.json
+        aws ecs register-task-definition \
+        --cli-input-json file://new-task-def.json
 
-                echo "Updating ECS service..."
+        echo "Updating ECS service..."
 
-                aws ecs update-service \
-                --cluster ${CLUSTER} \
-                --service ${SERVICE} \
-                --force-new-deployment
-                """
-            }
-        }
+        aws ecs update-service \
+        --cluster ${ECS_CLUSTER} \
+        --service ${ECS_SERVICE} \
+        --force-new-deployment
+        """
+    }
+}
 
         stage('Cleanup') {
             steps {
