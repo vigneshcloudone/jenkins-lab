@@ -71,28 +71,31 @@ stage('Deploy to ECS') {
     steps {
         sh """
         IMAGE=${ECR_REPO}:${GIT_SHA}
-        echo "Deploying image: $IMAGE"
+        echo "Deploying image: \$IMAGE"
 
-        # Get current task definition
         aws ecs describe-task-definition \
         --task-definition ${TASK_FAMILY} \
         --query taskDefinition > task-def.json
 
-        # Update only target container image
-        cat task-def.json | jq --arg IMAGE "$IMAGE" \
-        '(.containerDefinitions[] | select(.name=="jenkins-container")).image=$IMAGE
+        cat task-def.json | jq --arg IMAGE "\$IMAGE" \
+        '(.containerDefinitions[] | select(.name=="jenkins-container")).image=\$IMAGE
         | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
         > new-task-def.json
 
-        # Register new revision
         aws ecs register-task-definition \
         --cli-input-json file://new-task-def.json
 
-        # Trigger deployment
         aws ecs update-service \
-        --cluster ${ECS_CLUSTER} \
-        --service ${ECS_SERVICE} \
+        --cluster ${CLUSTER} \
+        --service ${SERVICE} \
         --force-new-deployment
+
+        aws ecs describe-services \
+        --cluster ${CLUSTER} \
+        --services ${SERVICE}
+        """
+    }
+}
 
         # Verify deployment
         aws ecs describe-services \
