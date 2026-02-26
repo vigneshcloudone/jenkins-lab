@@ -5,6 +5,7 @@ pipeline {
         AWS_REGION = "ap-south-1"
         ACCOUNT_ID = "201263439518"
         REPO_NAME  = "jenkins-lab"
+
         CLUSTER    = "jenkins-ecs-cluster"
         SERVICE    = "jenkins-task-service"
         TASK_FAMILY = "jenkins-task"
@@ -14,13 +15,13 @@ pipeline {
 
     stages {
 
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Get Git Commit SHA') {
+        stage('Get Git SHA') {
             steps {
                 script {
                     env.GIT_SHA = sh(
@@ -31,7 +32,7 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Image') {
             steps {
                 sh "docker build -t ${REPO_NAME}:${GIT_SHA} ."
             }
@@ -44,7 +45,7 @@ pipeline {
                 docker run -d -p 8081:80 --name test ${REPO_NAME}:${GIT_SHA}
                 sleep 5
                 curl -f http://localhost:8081 || exit 1
-                docker stop test && docker rm test
+                docker rm -f test
                 """
             }
         }
@@ -67,41 +68,31 @@ pipeline {
             }
         }
 
-stage('Deploy to ECS') {
-    steps {
-        sh """
-        IMAGE=${ECR_REPO}:${GIT_SHA}
-        echo "Deploying image: \$IMAGE"
+        stage('Deploy to ECS') {
+            steps {
+                sh """
+                IMAGE=${ECR_REPO}:${GIT_SHA}
+                echo "Deploying $IMAGE"
 
-        aws ecs describe-task-definition \
-        --task-definition ${TASK_FAMILY} \
-        --query taskDefinition > task-def.json
+                aws ecs describe-task-definition \
+                --task-definition ${TASK_FAMILY} \
+                --query taskDefinition > task-def.json
 
-        cat task-def.json | jq --arg IMAGE "\$IMAGE" \
-        '(.containerDefinitions[] | select(.name=="jenkins-container")).image=\$IMAGE
-        | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
-        > new-task-def.json
+                cat task-def.json | jq --arg IMAGE "$IMAGE" \
+                '(.containerDefinitions[] | select(.name=="jenkins-container")).image=$IMAGE
+                | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+                > new-task-def.json
 
-        aws ecs register-task-definition \
-        --cli-input-json file://new-task-def.json
+                aws ecs register-task-definition \
+                --cli-input-json file://new-task-def.json
 
-        aws ecs update-service \
-        --cluster ${CLUSTER} \
-        --service ${SERVICE} \
-        --force-new-deployment
-
-        aws ecs describe-services \
-        --cluster ${CLUSTER} \
-        --services ${SERVICE}
-        """
-        
-        Verify deployment
-        aws ecs describe-services \
-        --cluster ${ECS_CLUSTER} \
-        --services ${ECS_SERVICE}
-        """
-    }
-}
+                aws ecs update-service \
+                --cluster ${CLUSTER} \
+                --service ${SERVICE} \
+                --force-new-deployment
+                """
+            }
+        }
 
         stage('Cleanup') {
             steps {
