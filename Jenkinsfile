@@ -97,7 +97,7 @@ stage('Deploy to ECS') {
     }
 }
 
-        # Verify deployment
+        #Verify deployment
         aws ecs describe-services \
         --cluster ${ECS_CLUSTER} \
         --services ${ECS_SERVICE}
