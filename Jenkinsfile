@@ -40,6 +40,7 @@ pipeline {
         stage('Test Container') {
             steps {
                 sh """
+                docker rm -f test || true
                 docker run -d -p 8081:80 --name test ${REPO_NAME}:${GIT_SHA}
                 sleep 5
                 curl -f http://localhost:8081 || exit 1
