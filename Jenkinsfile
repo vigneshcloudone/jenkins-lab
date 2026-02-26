@@ -40,9 +40,9 @@ pipeline {
         stage('Test Container') {
             steps {
                 sh """
-                docker run -d -p 8080:80 --name test ${REPO_NAME}:${GIT_SHA}
+                docker run -d -p 8081:80 --name test ${REPO_NAME}:${GIT_SHA}
                 sleep 5
-                curl -f http://localhost:8080 || exit 1
+                curl -f http://localhost:8081 || exit 1
                 docker stop test && docker rm test
                 """
             }
