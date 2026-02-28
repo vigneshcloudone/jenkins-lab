@@ -71,7 +71,7 @@ pipeline {
 
         stage('Deploy to ECS') {
             steps {
-                sh """
+                sh '''
                     set -e
 
                     IMAGE=${ECR_REPO}:${GIT_SHA}
