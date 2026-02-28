@@ -2,15 +2,16 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = "ap-south-1"
-        ACCOUNT_ID = "201263439518"
-        REPO_NAME  = "jenkins-lab"
+        AWS_REGION  = "ap-south-1"
+        ACCOUNT_ID  = "201263439518"
+        REPO_NAME   = "jenkins-lab"
 
-        CLUSTER    = "jenkins-ecs-cluster"
-        SERVICE    = "jenkins-task-service"
+        CLUSTER     = "jenkins-cluster"
+        SERVICE     = "jenkins-task-service"
         TASK_FAMILY = "jenkins-task"
+        CONTAINER_NAME = "jenkins-container"
 
-        ECR_REPO   = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
+        ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
     }
 
     stages {
@@ -41,11 +42,11 @@ pipeline {
         stage('Test Container') {
             steps {
                 sh """
-                docker rm -f test || true
-                docker run -d -p 8081:80 --name test ${REPO_NAME}:${GIT_SHA}
-                sleep 5
-                curl -f http://localhost:8081 || exit 1
-                docker rm -f test
+                    docker rm -f test || true
+                    docker run -d -p 8081:80 --name test ${REPO_NAME}:${GIT_SHA}
+                    sleep 5
+                    curl -f http://localhost:8081
+                    docker rm -f test
                 """
             }
         }
@@ -53,8 +54,8 @@ pipeline {
         stage('Login to ECR') {
             steps {
                 sh """
-                aws ecr get-login-password --region ${AWS_REGION} | \
-                docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
                 """
             }
         }
@@ -62,8 +63,8 @@ pipeline {
         stage('Push Image') {
             steps {
                 sh """
-                docker tag ${REPO_NAME}:${GIT_SHA} ${ECR_REPO}:${GIT_SHA}
-                docker push ${ECR_REPO}:${GIT_SHA}
+                    docker tag ${REPO_NAME}:${GIT_SHA} ${ECR_REPO}:${GIT_SHA}
+                    docker push ${ECR_REPO}:${GIT_SHA}
                 """
             }
         }
@@ -71,32 +72,63 @@ pipeline {
         stage('Deploy to ECS') {
             steps {
                 sh """
-                IMAGE=${ECR_REPO}:${GIT_SHA}
-                echo "Deploying $IMAGE"
+                    set -e
 
-                aws ecs describe-task-definition \
-                --task-definition ${TASK_FAMILY} \
-                --query taskDefinition > task-def.json
+                    IMAGE=${ECR_REPO}:${GIT_SHA}
+                    echo "Deploying image: $IMAGE"
 
-                cat task-def.json | jq --arg IMAGE "$IMAGE" \
-                '(.containerDefinitions[] | select(.name=="jenkins-container")).image=$IMAGE
-                | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
-                > new-task-def.json
+                    # Get current task definition
+                    aws ecs describe-task-definition \
+                        --task-definition ${TASK_FAMILY} \
+                        --query taskDefinition \
+                        > task-def.json
 
-                aws ecs register-task-definition \
-                --cli-input-json file://new-task-def.json
+                    # Create new task definition revision
+                    jq --arg IMAGE "$IMAGE" --arg NAME "${CONTAINER_NAME}" '
+                    {
+                        family: .family,
+                        executionRoleArn: .executionRoleArn,
+                        taskRoleArn: .taskRoleArn,
+                        networkMode: .networkMode,
+                        containerDefinitions: (.containerDefinitions | map(
+                            if .name == $NAME
+                            then .image = $IMAGE
+                            else .
+                            end
+                        )),
+                        requiresCompatibilities: .requiresCompatibilities,
+                        cpu: .cpu,
+                        memory: .memory
+                    }' task-def.json > new-task-def.json
 
-                aws ecs update-service \
-                --cluster ${CLUSTER} \
-                --service ${SERVICE} \
-                --force-new-deployment
+                    # Register new revision
+                    NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
+                        --cli-input-json file://new-task-def.json \
+                        --query 'taskDefinition.taskDefinitionArn' \
+                        --output text)
+
+                    echo "New Task Definition ARN: $NEW_TASK_DEF_ARN"
+
+                    # Update service with new revision
+                    aws ecs update-service \
+                        --cluster ${CLUSTER} \
+                        --service ${SERVICE} \
+                        --task-definition $NEW_TASK_DEF_ARN
+
+                    # Wait for deployment to complete
+                    echo "Waiting for service to stabilize..."
+                    aws ecs wait services-stable \
+                        --cluster ${CLUSTER} \
+                        --services ${SERVICE}
+
+                    echo "Deployment successful!"
                 """
             }
         }
 
         stage('Cleanup') {
             steps {
-                sh "docker system prune -f"
+                sh "docker system prune -af"
             }
         }
     }
