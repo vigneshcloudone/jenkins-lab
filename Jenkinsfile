@@ -122,7 +122,7 @@ pipeline {
                         --services ${SERVICE}
 
                     echo "Deployment successful!"
-                """
+                '''
             }
         }
 
