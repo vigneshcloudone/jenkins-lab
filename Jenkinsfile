@@ -84,7 +84,7 @@ pipeline {
                         > task-def.json
 
                     # Create new task definition revision
-                    jq --arg IMAGE "$IMAGE" --arg NAME "${CONTAINER_NAME}" '
+                    jq --arg IMAGE "$IMAGE" --arg NAME "${webapp}" '
                     {
                         family: .family,
                         executionRoleArn: .executionRoleArn,
