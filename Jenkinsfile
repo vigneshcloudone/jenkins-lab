@@ -9,7 +9,7 @@ pipeline {
         CLUSTER     = "jenkins-cluster"
         SERVICE     = "jenkins-task-service"
         TASK_FAMILY = "jenkins-task"
-        CONTAINER_NAME = "jenkins-container"
+        CONTAINER_NAME = "webapp"
 
         ECR_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
     }
@@ -71,28 +71,29 @@ pipeline {
 
         stage('Deploy to ECS') {
             steps {
-                sh '''
+                sh """
                     set -e
 
                     IMAGE=${ECR_REPO}:${GIT_SHA}
-                    echo "Deploying image: $IMAGE"
+                    echo "Deploying image: \$IMAGE"
 
                     # Get current task definition
                     aws ecs describe-task-definition \
                         --task-definition ${TASK_FAMILY} \
                         --query taskDefinition \
+                        --region ${AWS_REGION} \
                         > task-def.json
 
                     # Create new task definition revision
-                    jq --arg IMAGE "$IMAGE" --arg NAME "${webapp}" '
+                    jq --arg IMAGE "\$IMAGE" --arg NAME "${CONTAINER_NAME}" '
                     {
                         family: .family,
                         executionRoleArn: .executionRoleArn,
                         taskRoleArn: .taskRoleArn,
                         networkMode: .networkMode,
                         containerDefinitions: (.containerDefinitions | map(
-                            if .name == $NAME
-                            then .image = $IMAGE
+                            if .name == \$NAME
+                            then .image = \$IMAGE
                             else .
                             end
                         )),
@@ -102,27 +103,29 @@ pipeline {
                     }' task-def.json > new-task-def.json
 
                     # Register new revision
-                    NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
+                    NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition \
                         --cli-input-json file://new-task-def.json \
                         --query 'taskDefinition.taskDefinitionArn' \
-                        --output text)
+                        --output text \
+                        --region ${AWS_REGION})
 
-                    echo "New Task Definition ARN: $NEW_TASK_DEF_ARN"
+                    echo "New Task Definition ARN: \$NEW_TASK_DEF_ARN"
 
-                    # Update service with new revision
+                    # Update service
                     aws ecs update-service \
                         --cluster ${CLUSTER} \
                         --service ${SERVICE} \
-                        --task-definition $NEW_TASK_DEF_ARN
+                        --task-definition \$NEW_TASK_DEF_ARN \
+                        --region ${AWS_REGION}
 
-                    # Wait for deployment to complete
                     echo "Waiting for service to stabilize..."
                     aws ecs wait services-stable \
                         --cluster ${CLUSTER} \
-                        --services ${SERVICE}
+                        --services ${SERVICE} \
+                        --region ${AWS_REGION}
 
                     echo "Deployment successful!"
-                '''
+                """
             }
         }
 
