@@ -4,7 +4,7 @@ pipeline {
     environment {
         AWS_REGION  = "ap-south-1"
         AWS_DEFAULT_REGION = "ap-south-1"
-        ACCOUNT_ID  = "201263439518"
+        ACCOUNT_ID  = "007510597827"
         REPO_NAME   = "jenkins-lab"
         CLUSTER     = "jenkins-cluster"
         SERVICE     = "jenkins-task-service"
