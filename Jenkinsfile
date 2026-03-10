@@ -89,7 +89,6 @@ pipeline {
                     {
                         family: .family,
                         executionRoleArn: .executionRoleArn,
-                        taskRoleArn: .taskRoleArn,
                         networkMode: .networkMode,
                         containerDefinitions: (.containerDefinitions | map(
                             if .name == \$NAME
